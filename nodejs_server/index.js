@@ -86,6 +86,7 @@ function bridgeAdvertise(bridgeName, args) {
     rssi : args.rssi,
     lastSeen : Date.now()
   };
+  // TODO: Store an RSSI average for each bridge
   if (device.dataReady || device.sendQueue.length)
     handleDeviceConnection(device);
 }
@@ -106,6 +107,8 @@ function handleDeviceConnection(device) {
   var data = "";
   if (device.sendQueue.length)
     data = device.sendQueue.shift();
+  // TODO: Use the nearest receiver (that is still in range) if more than one
+  // TODO: Only remove from queue when there's confirmation that the data was actually sent
   mqttClient.publish("MQTToBLE/snoopy/tx", JSON.stringify({addr:device.addr, data:data}));
 }
 

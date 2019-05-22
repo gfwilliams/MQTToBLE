@@ -3,6 +3,8 @@ MQTToBLE
 
 This repo contains a set of tools that you can use to set up a simple, scalable, MQTT over BLE implementation.
 
+**WARNING:** This is not in a usable state yet!
+
 Getting Started
 ---------------
 
