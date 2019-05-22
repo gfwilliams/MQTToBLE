@@ -3,6 +3,16 @@ MQTToBLE
 
 This repo contains a set of tools that you can use to set up a simple, scalable, MQTT over BLE implementation.
 
+Getting Started
+---------------
+
+On a PC:
+
+* Install an MQTT server at the default port on localhost
+* Install node.js and npm
+* `cd nodejs_bridge;nodejs index.js`
+* `cd nodejs_server;nodejs index.js`
+* Connect to an Espruino device and upload `espruino_node`
 
 How it works
 ------------
@@ -18,7 +28,6 @@ You have:
 * Each **MQTToBLE node** implements the MQTT protocol, and then uses BLE to transport the MQTT datastream.
 * A **MQTToBLE node** spends 99% of its time as a normal BLE advertiser.
 * An **MQTToBLE bridge** will connect to a **MQTToBLE node** when there is data to be sent to is *or* the **MQTToBLE node** advertises that it has data it needs to send. The bridge will then disconnect after a short period of inactivity.
-
 
 Each **MQTToBLE node** advertises the following 128 bit Service UUIDs:
 
@@ -43,9 +52,9 @@ Currently this is not implemented, however:
 Bridge -> Server comms
 ----------------------
 
-These are also done over MQTT.
+These are also done over MQTT:
 
 * Each bridge has a name
 * `MQTToBLE/{bridgename}/advertise` `{addr:str, rssi:int, dataReady:bool}` is sent from the bridge for each advertisement received
-* To connect, server sends `MQTToBLE/{bridgename}/tx` `{addr:str, data:str}` to the bridge, which can contain no data. Data to be sent must be chunked into 20 byte chunks already
+* To connect, server sends `MQTToBLE/{bridgename}/tx` `{addr:str, data:str}` to the bridge, which can contain empty (`""`) data. Data to be sent must be chunked into 20 byte chunks already by the server.
 * When data is received, the bridge sends `MQTToBLE/{bridgename/rx}` `{addr:str, data:str}` to the server with any received data packets
