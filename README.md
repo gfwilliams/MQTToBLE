@@ -47,5 +47,5 @@ These are also done over MQTT.
 
 * Each bridge has a name
 * `MQTToBLE/{bridgename}/advertise` `{addr:str, rssi:int, dataReady:bool}` is sent from the bridge for each advertisement received
-* To connect, server sends `MQTToBLE/{bridgename}/write` `{addr:str, data:str}` to the bridge, which can contain no data. Data to be sent must be chunked into 20 byte chunks already
+* To connect, server sends `MQTToBLE/{bridgename}/tx` `{addr:str, data:str}` to the bridge, which can contain no data. Data to be sent must be chunked into 20 byte chunks already
 * When data is received, the bridge sends `MQTToBLE/{bridgename/rx}` `{addr:str, data:str}` to the server with any received data packets

@@ -54,13 +54,13 @@ noble.on('scanStop', function() { console.log("Scanning stopped.");});
 mqttClient.on('connect', function () {
   console.log("MQTT> Connected");
   mqttConnected = true;
-  mqttClient.subscribe('MQTToBLE/'+BRIDGENAME+'/write');
+  mqttClient.subscribe('MQTToBLE/'+BRIDGENAME+'/tx');
 })
 
 mqttClient.on('message', function (topic, message) {
   message = message.toString(); // message is a buffer
   console.log("MQTT> "+topic, message)
-  if (topic == 'MQTToBLE/'+BRIDGENAME+'/write') {
+  if (topic == 'MQTToBLE/'+BRIDGENAME+'/tx') {
     var args = JSON.parse(message);
     bleWrite(args.addr, args.data);
   }
@@ -71,11 +71,11 @@ function bleWrite(addr, data) {
   if (btWriteQueue[addr]===undefined) btWriteQueue[addr] = [];
   btWriteQueue[addr].push(data);
   console.log("Queued write "+addr+" <- "+JSON.stringify(data));
-  servicebtWriteQueue(addr);
+  serviceBtWriteQueue(addr);
 }
 
 /// do the next thing in the queue, return false is nothing
-function servicebtWriteQueue(addr) {
+function serviceBtWriteQueue(addr) {
   if (btConnectedDevice!==undefined) {
     if (btConnectedDevice==addr) btWriteFn();
     return false; // already busy
@@ -102,7 +102,7 @@ function bleConnect(addr) {
     btConnectedDevice = undefined;
     btWriteFn = undefined;
     // look for more stuff
-    if (!servicebtWriteQueue()) {
+    if (!serviceBtWriteQueue()) {
       console.log("Noble: Starting scan");
       noble.startScanning([], true);
     }

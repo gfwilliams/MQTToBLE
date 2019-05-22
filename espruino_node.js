@@ -5,7 +5,6 @@
 var _q;
 var TMQ = function(server, optns){
 	var opts = optns || {};
-	this.cn = false;
 	_q = this;
 };
 
@@ -31,44 +30,21 @@ function mqPkt(cmd, variable, payload) {
 	return sFCC(cmd, variable.length + payload.length) + variable + payload;
 }
 
-function mqCon(id){
-	// Authentication?
-	var flags = 0;
-	var payload = mqStr(id);
-	flags = sFCC(parseInt(flags.toString(16), 16));
-	return mqPkt(0b00010000,
-		mqStr("MQTT")/*protocol name*/+
-		"\x04"/*protocol level*/+
-		flags/*flags*/+
-		"\xFF\xFF"/*Keepalive*/, payload);
-}
-
 TMQ.prototype.subscribe = function(topic) {
 	_q.cl.write(mqPkt((8 << 4 | 2), sFCC(1<<8, 1&255), mqStr(topic)+sFCC(1)));
 };
 
 TMQ.prototype.publish = function(topic, data) {
 	if((topic.length + data.length) > 127) {throw "tMQTT-TL";}
-	if(_q.cn) {
-		_q.cl.write(mqPkt(0b00110001, mqStr(topic), data));
-		_q.emit("published");
-	}
-};
-
-TMQ.prototype.disconnect = function() {
-	if(_q.cn){
-		try{
-			_q.cl.write(sFCC(14<<4)+sFCC(0));
-		}catch(e){
-			_q._scktClosed();
-		}
-	}
+    _q.cl.write(mqPkt(0b00110001, mqStr(topic), data));
+    _q.emit("published");
 };
 
 var mqttOut = "";
 var mqttPushTimeout = undefined;
 var mqtt = new TMQ("BLE", {});
 mqtt.cl = {write:function(d) { 
+  console.log(d.length);
   mqttOut+=d; 
   if (NRF.getSecurityStatus().connected)
     pushMQTTData();
@@ -82,7 +58,10 @@ function mqttHasData(d) {
 }
 
 function pushMQTTData() {
-  if (!mqttOut.length) return;
+  if (!mqttOut.length) {
+    mqttHasData(false);
+    return;
+  }
   if (mqttPushTimeout) return; // we'll get called back soon anyway
   if (!NRF.getSecurityStatus().connected) return; // no connection
   var d = mqttOut.substr(0,20);
@@ -118,6 +97,7 @@ NRF.setServices({
     }
   }
 });
+NRF.setScanResponse([]); // remove scan response packet
 mqttHasData(0);
  
 mqtt.subscribe("espruino/test");
