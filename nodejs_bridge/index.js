@@ -115,8 +115,9 @@ function bleConnect(addr) {
         return callback();
       }
       var data = btWriteQueue[addr].shift();
-      console.log("Sending "+JSON.stringify(data));
+      console.log(`Sending ${JSON.stringify(data)} (${data.length} bytes)`);
       txCharacteristic.write(new Buffer(data), false, function() {
+        console.log("Sendcb");
         sender(callback);
       });
     }

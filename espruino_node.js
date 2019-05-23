@@ -11,14 +11,17 @@ var TMQ = function(server, optns){
 var sFCC = String.fromCharCode;
 
 TMQ.prototype.onData = function(data) {
-	var cmd = data.charCodeAt(0);
-	if((cmd >> 4) === 3) {
-		var var_len = data.charCodeAt(2) << 8 | data.charCodeAt(3);
+  var cmd = data.charCodeAt(0);
+  var var_len = data.charCodeAt(2) << 8 | data.charCodeAt(3);
+	switch(cmd >> 4) {
+      case 2: _q.emit("connected");break; // CONNACK
+      case 3: { // PUBLISH
 		var msg = {
 			topic: data.substr(4, var_len),
 			message: data.substr(4+var_len, (data.charCodeAt(1))-var_len)
 		};
 		_q.emit("message", msg);
+      } break;
 	}
 };
 
@@ -44,7 +47,6 @@ var mqttOut = "";
 var mqttPushTimeout = undefined;
 var mqtt = new TMQ("BLE", {});
 mqtt.cl = {write:function(d) { 
-  console.log(d.length);
   mqttOut+=d; 
   if (NRF.getSecurityStatus().connected)
     pushMQTTData();
@@ -100,13 +102,14 @@ NRF.setServices({
 NRF.setScanResponse([]); // remove scan response packet
 mqttHasData(0);
  
-mqtt.subscribe("espruino/test");
+mqtt.on("connected", function(msg){
+  mqtt.subscribe("espruino/test");
+});
 mqtt.on("message", function(msg){
-    console.log(msg.topic);
-    console.log(msg.message);
+  console.log("MQTT:",msg.topic,msg.message);
 });
 mqtt.on("published", function(){
-    console.log("message sent");
+  console.log("message sent");
 });
-
+Serial1.setConsole(1);
 

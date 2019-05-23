@@ -18,6 +18,22 @@ mqttClient.on('message', function (topic, message) {
   if (path[2]=="advertise") bridgeAdvertise(path[1]/*bridgeName*/,args);
   if (path[2]=="rx") bridgeRx(path[1]/*bridgeName*/,args);
 });
+var MQTT_CMD = {
+    CONNECT    : 1,
+    CONNACK    : 2,
+    PUBLISH    : 3,
+    PUBACK     : 4,
+    PUBREC     : 5,
+    PUBREL     : 6,
+    PUBCOMP    : 7,
+    SUBSCRIBE  : 8,
+    SUBACK     : 9,
+    UNSUBSCRIBE: 10,
+    UNSUBACK   : 11,
+    PINGREQ    : 12,
+    PINGRESP   : 13,
+    DISCONNECT : 14
+};
 
 var sFCC = String.fromCharCode;
 function mqStr(str) {
@@ -68,8 +84,7 @@ function bridgeAdvertise(bridgeName, args) {
     });
     device.mqttSocket.on('data', function(data) {
       var cmd = data[0]>>4;
-      if (cmd==2) return console.log("Got CONNACK - ignoring");
-      if (cmd==13) return console.log("Got PINGRESP - ignoring");
+      if (cmd==MQTT_CMD.PINGRESP) return console.log("Got PINGRESP - ignoring");
       data = data.toString(); // was buffer
     	console.log(args.addr+ ' <== ' + JSON.stringify(data));
       device.sendQueue.push(data);
