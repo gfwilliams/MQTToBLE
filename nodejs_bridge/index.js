@@ -181,7 +181,7 @@ function bleConnect(addr) {
         btDevice.disconnect();
       }
       rxCharacteristic.on('data', function (data) {
-        data = data.toString(); // as string
+        data = data.toString('binary'); // as string
         console.log("BT> rx "+JSON.stringify(data));
         mqttClient.publish('MQTToBLE/'+BRIDGENAME+'/rx',JSON.stringify({
           addr : addr,
