@@ -9,6 +9,7 @@ var TMQ = function(server, optns){
 };
 
 var sFCC = String.fromCharCode;
+var DBG = print;
 
 TMQ.prototype.onData = function(data) {
   var cmd = data.charCodeAt(0);
@@ -68,6 +69,7 @@ function pushMQTTData() {
   if (!NRF.getSecurityStatus().connected) return; // no connection
   var d = mqttOut.substr(0,20);
   mqttOut = mqttOut.substr(20);
+  DBG("BLE TX "+E.toJS(d));
   NRF.updateServices({
   'ac910001-43be-801f-3ffc-65d26351c312' : {
     'ac910003-43be-801f-3ffc-65d26351c312': { // rx - from node TO bridge
@@ -89,6 +91,7 @@ NRF.setServices({
       value : "",
       maxLen : 20,
       onWrite : function(evt) {
+        DBG("BLE RX "+E.toJS(evt.data));
         if (evt.data.length) mqtt.onData(E.toString(evt.data));
         pushMQTTData();
       }
@@ -111,5 +114,8 @@ mqtt.on("message", function(msg){
 mqtt.on("published", function(){
   console.log("message sent");
 });
+
+NRF.on('connect',_=>DBG("BLE Connect"));
+NRF.on('disconnect',_=>DBG("BLE Disconnect"));
 Serial1.setConsole(1);
 
