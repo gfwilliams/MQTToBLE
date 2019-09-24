@@ -1,3 +1,7 @@
+/*
+ * Set partition scheme - No OTA (2MB APP, 2MB SPIFFS)
+ */
+
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <BLEDevice.h>
@@ -14,6 +18,7 @@ static BLEUUID service_uuid("ac910001-43be-801f-3ffc-65d26351c312");
 static BLEUUID characteristic_tx("ac910002-43be-801f-3ffc-65d26351c312");
 static BLEUUID characteristic_rx("ac910003-43be-801f-3ffc-65d26351c312");
 
+#define WIFI
 
 WiFiClient wifi;
 PubSubClient mqtt(wifi);
@@ -22,10 +27,12 @@ BLEScan* pBLEScan;
 BLERemoteCharacteristic* bleRXCharacteristic;
 BLERemoteCharacteristic* bleTXCharacteristic;
 
+long startTime;
 long lastMsg = 0;
 char msg[50];
 int value = 0;
-
+bool isConnecting = false;
+bool scanning = false;
 
 void bleScanStart() {
   pBLEScan->start(5, bleScanComplete, false);
@@ -62,6 +69,7 @@ class BLEClientCallback : public BLEClientCallbacks {
 };
 
 bool bleConnect(BLEAddress address) {
+  isConnecting = true;
   Serial.print("Forming a connection to ");
   Serial.println(address.toString().c_str());
   
@@ -73,7 +81,7 @@ bool bleConnect(BLEAddress address) {
 
   // Connect to the remove BLE Server.
   Serial.println("Connecting...");
-  if (!pClient->connect(address)) { // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+  if (!pClient->connect(address, BLE_ADDR_TYPE_RANDOM)) { // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
     Serial.println("Connection failed.");
     return false;
   }
@@ -109,10 +117,14 @@ bool bleConnect(BLEAddress address) {
   }
   Serial.println(" - Found our rx characteristic");  
 
-  if(bleRXCharacteristic->canNotify())
+  if(bleRXCharacteristic->canNotify()) {
+    Serial.println(" - Registering for notify");  
     bleRXCharacteristic->registerForNotify(bleNotifyCallback);
+  }
 
+  Serial.println(" - Write empty string to kick off");  
   bleTXCharacteristic->writeValue("", 0);
+  isConnecting = false;
   // we're connected
   return true;
 }
@@ -122,6 +134,7 @@ class AdvertiseCallbacks: public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice dev) {
     if (!dev.haveServiceUUID()) return;
     Serial.println(dev.toString().c_str());
+    if (isConnecting) return;
     
     if (dev.isAdvertisingService(service_uuid_nodata) ||
         dev.isAdvertisingService(service_uuid_hasdata)) {
@@ -136,15 +149,23 @@ class AdvertiseCallbacks: public BLEAdvertisedDeviceCallbacks {
       Serial.print(" -> ");
       Serial.println(message.c_str());
       mqtt.publish(topic.c_str(), message.c_str());
-      /*pBLEScan->stop();
-      myDevice = new BLEAdvertisedDevice(advertisedDevice);
-      doConnect = true;
-      doScan = true;*/
+      //pBLEScan->stop();
+      //myDevice = new BLEAdvertisedDevice(advertisedDevice);
+      //doConnect = true;
+      //doScan = true;
       pBLEScan->stop();
-      bleConnect(dev.getAddress());
+      //bleConnect(dev.getAddress());
     }
   }
 };
+
+static void my_gap_event_handler(esp_gap_ble_cb_event_t  event, esp_ble_gap_cb_param_t* param) {
+  ESP_LOGW(LOG_TAG, "custom gap event handler, event: %d", (uint8_t)event);
+}
+
+static void my_gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t gattc_if, esp_ble_gattc_cb_param_t* param) {
+  ESP_LOGW(LOG_TAG, "custom gattc event handler, event: %d", (uint8_t)event);
+}
 
 
 void setup()
@@ -154,6 +175,9 @@ void setup()
 
   Serial.println("Starting BLE...");
   BLEDevice::init("");
+
+  BLEDevice::setCustomGapHandler(my_gap_event_handler);
+  BLEDevice::setCustomGattcHandler(my_gattc_event_handler);
 
   // Retrieve a Scanner and set the callback we want to use to be informed when we
   // have detected a new device.  Specify that we want active scanning and start the
@@ -165,9 +189,10 @@ void setup()
   pBLEScan->setWindow(99); // scan for 
   pBLEScan->setActiveScan(true);
   //pBLEScan->setActiveScan(false); // don't bother with scan response
- 
+
+#ifdef WIFI   
   // Connecting to a WiFi network  
- /* Serial.print("Connecting to WiFi ");
+  Serial.print("Connecting to WiFi ");
   Serial.println(ssid);
   
   WiFi.begin(ssid, password);
@@ -183,9 +208,10 @@ void setup()
   Serial.println(WiFi.localIP());
   
   mqtt.setServer(mqtt_server, 1883);
-  mqtt.setCallback(callback);*/
+  mqtt.setCallback(callback);
+#endif  
 
- 
+  startTime = millis();
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -227,17 +253,21 @@ void mqttReconnect() {
   }
 }
 
-bool scanning = false;
-
 void loop()
 {
-  /*if (!mqtt.connected()) {
+
+#ifdef WIFI  
+  if (!mqtt.connected()) {
     mqttReconnect();
   }
-  mqtt.loop();*/
-  if (!scanning) {
+  mqtt.loop();
+#endif  
+  long now = millis();
+  
+  if ((now > (startTime+5000)) && !scanning) {
     scanning = true;
     //bleScanStart();
+    
     BLEScanResults foundDevices = pBLEScan->start(5);
     for (int i=0;i<foundDevices.getCount();i++) {
       BLEAdvertisedDevice dev = foundDevices.getDevice(i);
@@ -260,8 +290,8 @@ void loop()
       }
     }
   }
-/*
-  long now = millis();
+
+#ifdef WIFI
   if (now - lastMsg > 2000) {
     lastMsg = now;
     ++value;
@@ -269,5 +299,6 @@ void loop()
     Serial.print("Publish message: ");
     Serial.println(msg);
     mqtt.publish("outTopic", msg);  
-  }*/
+  }
+#endif  
 }
