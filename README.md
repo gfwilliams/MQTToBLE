@@ -19,11 +19,13 @@ On a PC:
 How it works
 ------------
 
-You have:
+You have 3 main components:
 
-* **MQTToBLE nodes** - low power Bluetooth LE devices that want to connect
+* **MQTToBLE nodes** - low power Bluetooth LE devices that want to use MQTT
 * **MQTToBLE bridge** - powered Bluetooth LE devices with internet connections. These communicate with **MQTToBLE nodes** and connect to a **MQTToBLE server**
 * **MQTToBLE server** - a server with an internet connection. This controls everything, choosing the nearest **MQTToBLE bridge** and telling it to connect to a **MQTToBLE node**
+
+**Note:** The directories within this repo are for implementations of components for different platforms.
 
 ### Summary:
 
@@ -58,5 +60,23 @@ These are also done over MQTT:
 
 * Each bridge has a name
 * `MQTToBLE/{bridgename}/advertise` `{addr:str, rssi:int, dataReady:bool}` is sent from the bridge for each advertisement received
-* To connect, server sends `MQTToBLE/{bridgename}/tx` `{addr:str, data:[...]}` to the bridge, which can contain empty (`""`) data. Data to be sent must be chunked into 20 byte chunks already by the server.
+* To connect, server sends `MQTToBLE/{bridgename}/tx` `{addr:str, data:[...]}` to the bridge, which can contain empty (`[]`) data. Data to be sent must be chunked into 20 byte chunks already by the server.
 * When data is received, the bridge sends `MQTToBLE/{bridgename}/rx` `{addr:str, data:[...]}` to the server with any received data packets
+
+TODO
+----
+
+### Nodes
+
+* More node implementations. ESP32 Arduino, nRF51/2 C code
+
+### Bridges
+
+* More testing/hardening of ESP32 implementation
+* Report back TX complete/fail
+* Some kind of configuration other than the `.h` file (HTTP server?) so one binary can be used on multiple devices
+
+### Server
+
+* Handle TX complete/fail messages
+* Keep track of whether a bridge is busy and don't send it more data if it is

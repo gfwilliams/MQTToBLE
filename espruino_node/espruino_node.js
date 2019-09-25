@@ -1,59 +1,62 @@
-/* Copyright (c) 2015 Ollie Phillips. See the file LICENSE for copying permission. */
-/* Stripped out MQTT module that does basic PUBSUB.
-   Originally from https://github.com/olliephillips/tinyMQTT */
+/* Super cut down MQTT implementation (originally basd on https://github.com/olliephillips/tinyMQTT)
+With glue code to work with MQTToBLE
 
-var _q;
-var TMQ = function(server, optns){
-	var opts = optns || {};
-	_q = this;
-};
+Subscribes to espruino/test
+When button is pressed, sends "Hello World" to espruino/button
+*/
 
-var sFCC = String.fromCharCode;
 var DBG = print;
 
-TMQ.prototype.onData = function(data) {
-  var cmd = data.charCodeAt(0);
-  var var_len = data.charCodeAt(2) << 8 | data.charCodeAt(3);
+var mqtt = {};
+var mqttInBuf = "";
+var mqttOutBuf = "";
+var mqttPushTimeout;
+var sFCC = String.fromCharCode;
+
+mqtt.onData = function(data) {
+  mqttInBuf += data;
+  var cmd = mqttInBuf.charCodeAt(0);
+  var len = mqttInBuf.charCodeAt(1)+2;
+  var var_len = mqttInBuf.charCodeAt(3);
+  if (len <= mqttInBuf.length) {    
 	switch(cmd >> 4) {
-      case 2: _q.emit("connected");break; // CONNACK
+      case 2: mqtt.emit("connected");break; // CONNACK
       case 3: { // PUBLISH
 		var msg = {
-			topic: data.substr(4, var_len),
-			message: data.substr(4+var_len, (data.charCodeAt(1))-var_len)
+			topic: mqttInBuf.substr(4, var_len),
+			message: mqttInBuf.substr(4+var_len, len-var_len)
 		};
-		_q.emit("message", msg);
+		mqtt.emit("message", msg);
       } break;
 	}
+    mqttInBuf="";
+  }
 };
 
 function mqStr(str) {
-	return sFCC(str.length >> 8, str.length&255) + str;
+  return sFCC(str.length >> 8, str.length&255) + str;
 }
 
 function mqPkt(cmd, variable, payload) {
-	return sFCC(cmd, variable.length + payload.length) + variable + payload;
+  return sFCC(cmd, variable.length + payload.length) + variable + payload;
 }
 
-TMQ.prototype.subscribe = function(topic) {
-	_q.cl.write(mqPkt((8 << 4 | 2), sFCC(1<<8, 1&255), mqStr(topic)+sFCC(1)));
+mqtt.subscribe = function(topic) {
+  mqtt.write(mqPkt((8 << 4 | 2), sFCC(1<<8, 1&255), mqStr(topic)+sFCC(1)));
 };
 
-TMQ.prototype.publish = function(topic, data) {
-	if((topic.length + data.length) > 127) {throw "tMQTT-TL";}
-    _q.cl.write(mqPkt(0b00110001, mqStr(topic), data));
-    _q.emit("published");
+mqtt.publish = function(topic, data) {
+  if((topic.length + data.length) > 127) {throw "tMQTT-TL";}
+  mqtt.write(mqPkt(0b00110001, mqStr(topic), data));
+  mqtt.emit("published");
 };
-
-var mqttOut = "";
-var mqttPushTimeout = undefined;
-var mqtt = new TMQ("BLE", {});
-mqtt.cl = {write:function(d) { 
-  mqttOut+=d; 
+mqtt.write = function(d) { 
+  mqttOutBuf+=d; 
   if (NRF.getSecurityStatus().connected)
     pushMQTTData();
   else
     mqttHasData(true); 
-}};
+};
 function mqttHasData(d) {
   // 2 byte, flags
   // 17 byte, complete 128 bit uuid list,
@@ -61,14 +64,14 @@ function mqttHasData(d) {
 }
 
 function pushMQTTData() {
-  if (!mqttOut.length) {
+  if (!mqttOutBuf.length) {
     mqttHasData(false);
     return;
   }
   if (mqttPushTimeout) return; // we'll get called back soon anyway
   if (!NRF.getSecurityStatus().connected) return; // no connection
-  var d = mqttOut.substr(0,20);
-  mqttOut = mqttOut.substr(20);
+  var d = mqttOutBuf.substr(0,20);
+  mqttOutBuf = mqttOutBuf.substr(20);
   DBG("BLE TX "+E.toJS(d));
   NRF.updateServices({
   'ac910001-43be-801f-3ffc-65d26351c312' : {
@@ -77,7 +80,7 @@ function pushMQTTData() {
       notify: true
     }
   }});
-  if (mqttOut.length) {
+  if (mqttOutBuf.length) {
     mqttPushTimeout = setTimeout(function() {
       mqttPushTimeout = undefined;
       pushMQTTData();
@@ -92,6 +95,7 @@ NRF.setServices({
       maxLen : 20,
       onWrite : function(evt) {
         DBG("BLE RX "+E.toJS(evt.data));
+        b = evt.data;
         if (evt.data.length) mqtt.onData(E.toString(evt.data));
         pushMQTTData();
       }
@@ -104,6 +108,8 @@ NRF.setServices({
 });
 NRF.setScanResponse([]); // remove scan response packet
 mqttHasData(0);
+
+// ===============================================
  
 mqtt.on("connected", function(msg){
   mqtt.subscribe("espruino/test");
@@ -112,10 +118,16 @@ mqtt.on("message", function(msg){
   console.log("MQTT:",msg.topic,msg.message);
 });
 mqtt.on("published", function(){
-  console.log("message sent");
+  console.log("MQTT: message sent");
 });
+setWatch(function() {
+  mqtt.publish("espruino/button", "Hello world");
+}, BTN, {repeat:true, edge:"rising"});
 
-NRF.on('connect',_=>DBG("BLE Connect"));
+NRF.on('connect',_=>{
+  mqttInBuf=""; // reset buffer in case of bad connection
+  DBG("BLE Connect");
+});
 NRF.on('disconnect',_=>DBG("BLE Disconnect"));
 Serial1.setConsole(1);
 

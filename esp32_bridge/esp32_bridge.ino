@@ -1,13 +1,14 @@
 /*
- * Install latest https://github.com/espressif/arduino-esp32 
- * Board: ESP32 Dev module
- * Set partition scheme - No OTA (2MB APP, 2MB SPIFFS)
- * 
+ * ESP32 MQTT->BLE Bridge  for https://github.com/gfwilliams/MQTToBLE
+ *
+ * Install latest https://github.com/espressif/arduino-esp32
+ * Tools -> Board Tools -> ESP32 Dev module
+ * Tools -> partition scheme Tools -> No OTA (2MB APP, 2MB SPIFFS)
+ * Tools -> Manage Libraries) -> Install Arduino_JSON
+ *
  * https://github.com/knolleary/pubsubclient/releases > Arduino/libraries
  * edit Arduino/libraries/pubsubclient-2.7/src/PubSubClient.h -> #define MQTT_MAX_PACKET_SIZE 512
- * 
- * Ctrl-Shift-I (Manage Libraries)
- * Install Arduino_JSON
+ *
  */
 
 #include "const.h"
@@ -70,7 +71,7 @@ void mqttStatus(const String &type, const String &message) {
   json["type"] = type.c_str();
   json["data"] = message.c_str();
   String jsonString = JSON.stringify(json);
-  
+
   Serial.print("MQTT> Status ");
   Serial.println(jsonString);
   mqtt.publish(mqttTopicStatus, jsonString.c_str());
@@ -89,7 +90,7 @@ void bleScanStop() {
 void bleScanComplete(BLEScanResults scanResults) {
   Serial.println("BLE> Scan complete");
   // restart scan
-  bleScanStart();  
+  bleScanStart();
 }
 
 
@@ -105,7 +106,7 @@ static void bleNotifyCallback(
   if (bleRXDataLength > sizeof(bleRXData))
     bleRXDataLength = sizeof(bleRXData);
   memcpy(bleRXData, pData, length);
-  bleRXDataReceived = true;  
+  bleRXDataReceived = true;
   // send mqtt data on callback again - turned off because of mqtt issue
 }
 
@@ -146,7 +147,7 @@ bool bleConnect(BLEAddress address) {
   bleConnectionState = BCS_CONNECTING;
   Serial.print("BLE> Forming a connection to ");
   Serial.println(bleConnectedDevice.toString().c_str());
-  
+
   bleClient = BLEDevice::createClient();
   Serial.println("BLE> Created client");
 
@@ -194,18 +195,18 @@ bool bleConnect(BLEAddress address) {
     bleDisconnect();
     return false;
   }
-  Serial.println("BLE> Found our rx characteristic");  
+  Serial.println("BLE> Found our rx characteristic");
 
   if(bleRXCharacteristic->canNotify()) {
-    Serial.println("BLE> Registering for notify");  
+    Serial.println("BLE> Registering for notify");
     bleRXCharacteristic->registerForNotify(bleNotifyCallback);
   }
 
   // we're connected
-  bleConnectionState = BCS_CONNECTED;  
+  bleConnectionState = BCS_CONNECTED;
   bleConnectionTimer = millis();
 
-  //Serial.println("BLE> Write empty string to kick off transmit");  
+  //Serial.println("BLE> Write empty string to kick off transmit");
   //bleWrite("",0);
 
   return true;
@@ -218,7 +219,7 @@ class AdvertiseCallbacks: public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice dev) {
     if (!dev.haveServiceUUID()) return;
     //Serial.println(dev.toString().c_str());
-    
+
     if (dev.isAdvertisingService(service_uuid_nodata) ||
         dev.isAdvertisingService(service_uuid_hasdata)) {
       bool hasData = dev.isAdvertisingService(service_uuid_hasdata);
@@ -254,30 +255,30 @@ void setup()
   pBLEScan->setAdvertisedDeviceCallbacks(new AdvertiseCallbacks());
   // scan for pretty much all the time
   pBLEScan->setInterval(100);
-  pBLEScan->setWindow(99); // scan for 
+  pBLEScan->setWindow(99); // scan for
   pBLEScan->setActiveScan(true);
   //pBLEScan->setActiveScan(false); // don't bother with scan response
 
-#ifdef WIFI   
-  // Connecting to a WiFi network  
+#ifdef WIFI
+  // Connecting to a WiFi network
   Serial.print("WiFi> Connecting to WiFi ");
   Serial.println(ssid);
-  
+
   WiFi.begin(ssid, password);
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  
+
   Serial.println("");
   Serial.println("WiFi> connected");
   Serial.print("WiFi> IP address: ");
   Serial.println(WiFi.localIP());
-  
+
   mqtt.setServer(mqtt_server, 1883);
   mqtt.setCallback(mqttGotMessage);
-#endif  
+#endif
 
   bleScanStart();
 
@@ -290,7 +291,7 @@ void mqttGotTxMessage(byte* payload, unsigned int length) {
   if (length>=sizeof(json)) length=sizeof(json)-1;
   memcpy(json, payload, length);
   json[length] = 0;
-  
+
   JSONVar msgRoot = JSON.parse(json);
 
   // JSON.typeof(jsonVar) can be used to get the type of the var
@@ -308,7 +309,7 @@ void mqttGotTxMessage(byte* payload, unsigned int length) {
   BLEAddress deviceAddress = BLEAddress((const char*)msgRoot["addr"]);
   JSONVar jsonData = msgRoot["data"];
   uint8_t data[20];
-  size_t dataLen = 0;  
+  size_t dataLen = 0;
   if (JSON.typeof(jsonData) == "array") {
     dataLen = (size_t)(int)jsonData.length();
     if (dataLen > sizeof(data)) {
@@ -332,13 +333,13 @@ void mqttGotTxMessage(byte* payload, unsigned int length) {
   Serial.print("MQTT> TX data ");
   Serial.print(dataLen);
   Serial.println(" bytes");
-  
+
   if (bleConnectionState == BCS_CONNECTED) {
     if (!deviceAddress.equals(bleConnectedDevice))
       mqttStatus("error", "No MQTT TX characteristic on BLE device");
     else
       bleWrite(data, dataLen);
-  } else {  
+  } else {
     if (bleConnect(deviceAddress))
       bleWrite(data, dataLen);
   }
@@ -383,12 +384,12 @@ void mqttReconnect() {
 void loop() {
   long now = millis();
 
-#ifdef WIFI  
+#ifdef WIFI
   if (!mqtt.connected()) {
     mqttReconnect();
   }
   mqtt.loop();
-#endif  
+#endif
 
   if (bleConnectionState == BCS_CONNECTED) {
     if (bleRXDataReceived) {
@@ -408,12 +409,12 @@ void loop() {
         jsonString += (int)bleRXData[i];
       }
       jsonString += "]}";*/
-      
+
       Serial.print("MQTT> RX ");
       Serial.println(jsonString.c_str());
       mqtt.publish(mqttTopicRx, jsonString.c_str());
     }
-    
+
     if ((bleConnectionTimer + BLE_CONNECTION_TIMEOUT) < now) {
       Serial.println("BLE> disconnecting due to inactivity");
       bleDisconnect();
@@ -426,5 +427,5 @@ void loop() {
     Serial.println("MQTT> ping");
     mqttStatus("mqtt", "ping");
   }
-#endif  
+#endif
 }

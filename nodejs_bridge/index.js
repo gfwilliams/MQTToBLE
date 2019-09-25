@@ -1,3 +1,5 @@
+// Node.js MQTT->BLE Bridge  for https://github.com/gfwilliams/MQTToBLE
+
 var MQTT_BRIDGE_SERVER = "mqtt://localhost"; // server that bridges are connected to
 var BRIDGENAME = "esp32";
 var DISCONNECT_TIMEOUT = 2000; // 2 seconds of inactivity
