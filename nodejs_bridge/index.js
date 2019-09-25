@@ -1,4 +1,4 @@
-var SERVER = "mqtt://localhost";
+var MQTT_BRIDGE_SERVER = "mqtt://localhost"; // server that bridges are connected to
 var BRIDGENAME = "esp32";
 var DISCONNECT_TIMEOUT = 2000; // 2 seconds of inactivity
 var MQTToBLE_UUID_NODATA = "ac91000043be801f3ffc65d26351c312";
@@ -8,7 +8,7 @@ var MQTToBLE_CHAR_TX = "ac91000243be801f3ffc65d26351c312";
 var MQTToBLE_CHAR_RX = "ac91000343be801f3ffc65d26351c312";
 
 var mqtt = require('mqtt');
-var mqttClient  = mqtt.connect(SERVER);
+var mqttClient  = mqtt.connect(MQTT_BRIDGE_SERVER);
 var mqttConnected = false;
 
 var noble = require('noble');
@@ -18,13 +18,19 @@ var btWriteFn = undefined;
 var btWriteQueue = {}; // per-device queue of stuff to write (map addr -> array of strings)
 
 function strToArray(str) {
-  var b = new Array[str.length];
+  var b = new Array(str.length);
   for (var i=0;i<str.length;i++)
     b[i]=str.charCodeAt(i);
   return b;
 }
 function arrayToString(array) {
   return String.fromCharCode.apply(null,array);
+}
+function bufferToArray(buf) {
+  var b = new Array(buf.length);
+  for (var i=0;i<buf.length;i++)
+    b[i]=buf.readUInt8(i);
+  return b;
 }
 
 function onDiscovery(peripheral) {
@@ -192,11 +198,11 @@ function bleConnect(addr) {
         btDevice.disconnect();
       }
       rxCharacteristic.on('data', function (data) {
-        data = data.toString('binary'); // as string
+        data = bufferToArray(data); // as string
         console.log("BT> rx "+JSON.stringify(data));
         mqttClient.publish('MQTToBLE/'+BRIDGENAME+'/rx',JSON.stringify({
           addr : addr,
-          data : strToArray(data)
+          data : data
         }));
       });
       rxCharacteristic.subscribe(function() {

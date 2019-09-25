@@ -1,10 +1,13 @@
-var SERVER = "mqtt://localhost";
+var MQTT_BRIDGE_SERVER = "mqtt://localhost"; // server that bridges are connected to
+var MQTT_SERVER = "localhost"; // server we're connecting to
 var RECONNECT_TIMEOUT = 20*1000;
+var BLE_MAX_PACKET_SIZE = 20;
 
 var bleDevices = {};
 var net = require('net');
 var mqtt = require('mqtt');
-var mqttClient  = mqtt.connect(SERVER);
+console.log("MQTT> Connecting...");
+var mqttClient  = mqtt.connect(MQTT_BRIDGE_SERVER);
 mqttClient.on('connect', function () {
   console.log("MQTT> Connected");
   mqttClient.subscribe('MQTToBLE/#');
@@ -58,15 +61,21 @@ function strToBuf(str) {
   return b;
 }
 function strToArray(str) {
-  var b = new Array[str.length];
+  var b = new Array(str.length);
   for (var i=0;i<str.length;i++)
     b[i]=str.charCodeAt(i);
+  return b;
+}
+function bufferToArray(buf) {
+  var b = new Array(buf.length);
+  for (var i=0;i<buf.length;i++)
+    b[i]=buf.readUInt8(i);
   return b;
 }
 function arrayToBuf(array) {
   var b = Buffer.alloc(array.length);
   for (var i=0;i<array.length;i++)
-    b[i]=array[i];
+    b.writeUInt8(array[i],i);
   return b;
 }
 
@@ -81,13 +90,13 @@ function bridgeAdvertise(bridgeName, args) {
       addr : args.addr,
       bridges : {},
       dataReady : false,
-      sendQueue : [],
+      sendQueue : [], // array of arrays of data
       mqttSocket : new net.Socket(),
       lastConnected : 0
     };
     bleDevices[args.addr] = device;
     var mqttKeepAlive;
-    device.mqttSocket.connect(1883, 'localhost', function() {
+    device.mqttSocket.connect(1883, MQTT_SERVER, function() {
       console.log("MQTT socket for "+args.addr+" open");
       device.mqttSocket.write(strToBuf(mqCon(args.addr)));
       mqttKeepAlive = setInterval(function() {
@@ -97,9 +106,20 @@ function bridgeAdvertise(bridgeName, args) {
     device.mqttSocket.on('data', function(data) {
       var cmd = data[0]>>4;
       if (cmd==MQTT_CMD.PINGRESP) return console.log("Got PINGRESP - ignoring");
-      data = data.toString(); // was buffer
-    	console.log(args.addr+ ' <== ' + JSON.stringify(data));
-      device.sendQueue.push(data);
+      data = bufferToArray(data); // was buffer
+    	console.log(args.addr+ ' <== ' + data);
+      while (data!==undefined) {
+        var d;
+        if (data.length <= BLE_MAX_PACKET_SIZE)  {
+          d = data;
+          data = undefined;
+        } else {
+          d = data.slice(0,BLE_MAX_PACKET_SIZE);
+          data = data.slice(BLE_MAX_PACKET_SIZE);
+        }
+        console.log('... ' + d);
+        device.sendQueue.push(d);
+      }
       handleDeviceConnection(device);
     });
     device.mqttSocket.on('close', function() {
@@ -110,6 +130,7 @@ function bridgeAdvertise(bridgeName, args) {
   }
   device.dataReady = args.dataReady;
   device.bridges[bridgeName] = {
+    name : bridgeName,
     rssi : args.rssi,
     lastSeen : Date.now()
   };
@@ -119,10 +140,9 @@ function bridgeAdvertise(bridgeName, args) {
 }
 function bridgeRx(bridgeName, args) {
   // args = {addr:str, data:str}
-  console.log(args.addr+" ==> "+JSON.stringify(args))
+  console.log(args.addr+" ==> "+args.data)
   var device = bleDevices[args.addr];
   if (!device) throw new Error("Unknown device!");
-  console.log(arrayToBuf(args.data).length);
   device.mqttSocket.write(arrayToBuf(args.data));
 }
 
@@ -131,12 +151,22 @@ function handleDeviceConnection(device) {
     throw new Error("handleDeviceConnection called when no need");
   if (device.lastConnected+RECONNECT_TIMEOUT > Date.now())
     return; // don't reconnect if we already did something
-  var data = "";
+  var data = [];
   if (device.sendQueue.length)
     data = device.sendQueue.shift();
-  // TODO: Use the nearest receiver (that is still in range) if more than one
-  // TODO: Only remove from queue when there's confirmation that the data was actually sent
-  mqttClient.publish("MQTToBLE/snoopy/tx", JSON.stringify({addr:device.addr, data:strToArray(data)}));
+  // Use the nearest receiver (that is still in range) if more than one
+  var bridge;
+  Object.keys(device.bridges).forEach(name=>{
+    var b = device.bridges[name];
+    if (!bridge || b.rssi>bridge.rssi)
+      bridge = b;
+  });
+  if (!bridge) throw new Error("No bridge for "+device.addr+"!");
+  mqttClient.publish("MQTToBLE/"+bridge.name+"/tx", JSON.stringify({addr:device.addr, data:data}));
+  // TODO: Only remove from queue and send another when there's confirmation that the data was actually sent
+  if (device.sendQueue.length) setTimeout(function() {
+    handleDeviceConnection(device);
+  }, 100);
 }
 
 // debugging

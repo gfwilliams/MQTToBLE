@@ -4,6 +4,7 @@
  * Set partition scheme - No OTA (2MB APP, 2MB SPIFFS)
  * 
  * https://github.com/knolleary/pubsubclient/releases > Arduino/libraries
+ * edit Arduino/libraries/pubsubclient-2.7/src/PubSubClient.h -> #define MQTT_MAX_PACKET_SIZE 512
  * 
  * Ctrl-Shift-I (Manage Libraries)
  * Install Arduino_JSON
@@ -11,7 +12,7 @@
 
 #include "const.h"
 #include <WiFi.h>
-#include <PubSubClient.h> // MQTT
+#include <PubSubClient.h> // MQTT - https://github.com/knolleary/pubsubclient
 #include <Arduino_JSON.h> // JSON - https://github.com/arduino-libraries/Arduino_JSON/blob/master/examples/JSONObject/JSONObject.ino
 #include <BLEDevice.h>
 // No docs? Use https://github.com/nkolban/esp32-snippets/tree/master/cpp_utils as source
@@ -48,7 +49,7 @@ typedef enum {
 
 BLEAddress bleConnectedDevice = BLEAddress("00:00:00:00:00:00");
 BLEConnectionState bleConnectionState = BCS_DISCONNECTED;
-BLEClient* bleClient;
+BLEClient* bleClient = 0;
 BLERemoteCharacteristic* bleRXCharacteristic;
 BLERemoteCharacteristic* bleTXCharacteristic;
 uint8_t bleRXData[20];
@@ -105,6 +106,7 @@ static void bleNotifyCallback(
     bleRXDataLength = sizeof(bleRXData);
   memcpy(bleRXData, pData, length);
   bleRXDataReceived = true;  
+  // send mqtt data on callback again - turned off because of mqtt issue
 }
 
 class BLEClientCallback : public BLEClientCallbacks {
@@ -123,9 +125,11 @@ void bleWrite(const uint8_t* data, size_t length) {
 }
 
 void bleDisconnect() {
-  bleClient->disconnect();
-  delete bleClient;
-  bleClient = 0;
+  if (bleClient) {
+    bleClient->disconnect();
+    // delete bleClient; // heap corruption?
+    bleClient = 0;
+  }
   bleConnectionState = BCS_DISCONNECTED;
   bleScanStart();
 }
@@ -389,25 +393,25 @@ void loop() {
   if (bleConnectionState == BCS_CONNECTED) {
     if (bleRXDataReceived) {
       bleRXDataReceived = false;
-      /*JSONVar json;
+      JSONVar json;
       json["addr"] = bleConnectedDevice.toString().c_str();
       JSONVar jsonData;
       for (size_t i=0;i<bleRXDataLength;i++)
         jsonData[i] = bleRXData[i];
       json["data"] = jsonData;
-      String jsonString = JSON.stringify(json);*/
+      String jsonString = JSON.stringify(json);
 
-      String jsonString = String("{\"addr\":\"")+bleConnectedDevice.toString().c_str()+
+      /*String jsonString = String("{\"addr\":\"")+bleConnectedDevice.toString().c_str()+
         "\",\"data\":[";
       for (size_t i=0;i<bleRXDataLength;i++) {
         if (i) jsonString += ",";
         jsonString += (int)bleRXData[i];
       }
-      jsonString += "]}";
+      jsonString += "]}";*/
       
       Serial.print("MQTT> RX ");
-      Serial.println(jsonString);
-      mqtt.publish(mqttTopicRx, jsonString.c_str()); // broken somehow. yay!
+      Serial.println(jsonString.c_str());
+      mqtt.publish(mqttTopicRx, jsonString.c_str());
     }
     
     if ((bleConnectionTimer + BLE_CONNECTION_TIMEOUT) < now) {
