@@ -1,5 +1,5 @@
 var SERVER = "mqtt://localhost";
-var BRIDGENAME = "snoopy";
+var BRIDGENAME = "esp32";
 var DISCONNECT_TIMEOUT = 2000; // 2 seconds of inactivity
 var MQTToBLE_UUID_NODATA = "ac91000043be801f3ffc65d26351c312";
 var MQTToBLE_UUID_DATA = "ac91000143be801f3ffc65d26351c312";
@@ -16,6 +16,16 @@ var btDevices = {};
 var btConnectedDevice = undefined;
 var btWriteFn = undefined;
 var btWriteQueue = {}; // per-device queue of stuff to write (map addr -> array of strings)
+
+function strToArray(str) {
+  var b = new Array[str.length];
+  for (var i=0;i<str.length;i++)
+    b[i]=str.charCodeAt(i);
+  return b;
+}
+function arrayToString(array) {
+  return String.fromCharCode.apply(null,array);
+}
 
 function onDiscovery(peripheral) {
   // peripheral.rssi                             - signal strength
@@ -62,7 +72,7 @@ mqttClient.on('message', function (topic, message) {
   console.log("MQTT> "+topic, message)
   if (topic == 'MQTToBLE/'+BRIDGENAME+'/tx') {
     var args = JSON.parse(message);
-    bleWrite(args.addr, args.data);
+    bleWrite(args.addr, arrayToString(args.data));
   }
 })
 
@@ -186,7 +196,7 @@ function bleConnect(addr) {
         console.log("BT> rx "+JSON.stringify(data));
         mqttClient.publish('MQTToBLE/'+BRIDGENAME+'/rx',JSON.stringify({
           addr : addr,
-          data : data
+          data : strToArray(data)
         }));
       });
       rxCharacteristic.subscribe(function() {

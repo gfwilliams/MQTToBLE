@@ -57,6 +57,18 @@ function strToBuf(str) {
     b[i]=str.charCodeAt(i);
   return b;
 }
+function strToArray(str) {
+  var b = new Array[str.length];
+  for (var i=0;i<str.length;i++)
+    b[i]=str.charCodeAt(i);
+  return b;
+}
+function arrayToBuf(array) {
+  var b = Buffer.alloc(array.length);
+  for (var i=0;i<array.length;i++)
+    b[i]=array[i];
+  return b;
+}
 
 function bridgeAdvertise(bridgeName, args) {
   // args = {addr:str, rssi:int, dataReady:bool}
@@ -110,8 +122,8 @@ function bridgeRx(bridgeName, args) {
   console.log(args.addr+" ==> "+JSON.stringify(args))
   var device = bleDevices[args.addr];
   if (!device) throw new Error("Unknown device!");
-  console.log(strToBuf(args.data).length);
-  device.mqttSocket.write(strToBuf(args.data));
+  console.log(arrayToBuf(args.data).length);
+  device.mqttSocket.write(arrayToBuf(args.data));
 }
 
 function handleDeviceConnection(device) {
@@ -124,7 +136,7 @@ function handleDeviceConnection(device) {
     data = device.sendQueue.shift();
   // TODO: Use the nearest receiver (that is still in range) if more than one
   // TODO: Only remove from queue when there's confirmation that the data was actually sent
-  mqttClient.publish("MQTToBLE/snoopy/tx", JSON.stringify({addr:device.addr, data:data}));
+  mqttClient.publish("MQTToBLE/snoopy/tx", JSON.stringify({addr:device.addr, data:strToArray(data)}));
 }
 
 // debugging
