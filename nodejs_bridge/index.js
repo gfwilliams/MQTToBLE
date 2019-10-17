@@ -61,7 +61,7 @@ function onDiscovery(peripheral) {
 
 noble.on('stateChange',  function(state) {
   if (state!="poweredOn") return;
-  console.log("Starting scan...");
+  console.log("Starting scan... ("+state+")");
   noble.startScanning([], true);
 });
 noble.on('discover', onDiscovery);
@@ -153,7 +153,7 @@ function bleConnect(addr) {
     function startDisconnectTimeout() {
       if (disconnectTimeout) clearTimeout(disconnectTimeout);
       disconnectTimeout = setTimeout(function() {
-        console.log("BT> Disconnecting");
+        console.log("BT> Disconnecting (timeout)");
         btDevice.disconnect();
       }, DISCONNECT_TIMEOUT);
     }
@@ -170,6 +170,7 @@ function bleConnect(addr) {
   console.log("Noble: Stopping scan");
   noble.stopScanning();
   console.log("BT> Connecting");
+  btDevice.removeAllListeners();
   btDevice.on('disconnect', function() {
     txCharacteristic = undefined;
     rxCharacteristic = undefined;

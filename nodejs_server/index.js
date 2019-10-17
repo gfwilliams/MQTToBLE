@@ -1,6 +1,6 @@
 // Node.js MQTT->BLE Server for https://github.com/gfwilliams/MQTToBLE
 
-var MQTT_BRIDGE_SERVER = "mqtt://frank.local"; // server that bridges are connected to
+var MQTT_BRIDGE_SERVER = "mqtt://localhost"; // server that bridges are connected to
 var MQTT_SERVER = "localhost"; // server we're connecting to
 var RECONNECT_TIMEOUT = 20*1000;
 var BLE_MAX_PACKET_SIZE = 20;
